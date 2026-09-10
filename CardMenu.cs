@@ -49,6 +49,7 @@ namespace StackMenu
             SetExtraData(root.CardData, PinnedPosZKey, pos.z);
 
             root.PushEnabled = false;
+            root.CardData.MyGameCard.BeingDragged = false;
             pinnedCards[root] = pos;
             UpdateBadge(root);
 
@@ -85,15 +86,21 @@ namespace StackMenu
             GameCard root = card.GetRootCard();
             if (root == null || root.CardData == null) return false;
 
-            return root.CardData.LeftoverExtraData != null &&
-                   root.CardData.LeftoverExtraData.Any(x => x.AttributeId == CompactedKey && x.BoolValue);
+            return root.CardData.Id == "stackmenu_compactcard";
         }
 
         public static int GetCompactedCount(GameCard card)
         {
             if (card == null || card.CardData == null) return 0;
             GameCard root = card.GetRootCard();
-            if (root == null || root.CardData == null || root.CardData.LeftoverExtraData == null) return 0;
+            if (root == null || root.CardData == null) return 0;
+
+            if (root.CardData is CompactCard compactCard && compactCard.CompactedData != null)
+            {
+                return compactCard.CompactedData.Count;
+            }
+
+            if (root.CardData.LeftoverExtraData == null) return 0;
 
             var extra = root.CardData.LeftoverExtraData.FirstOrDefault(x => x.AttributeId == CompactedCountKey);
             return extra != null ? extra.IntValue : 0;
@@ -136,7 +143,7 @@ namespace StackMenu
             foreach (var saved in stored)
             {
                 if (saved == null || string.IsNullOrEmpty(saved.CardPrefabId)) continue;
-                CardData prefab = WorldManager.instance?.GetCardPrefab(saved.CardPrefabId, showError: false);
+                CardData? prefab = WorldManager.instance?.GetCardPrefab(saved.CardPrefabId, showError: false);
                 if (prefab != null)
                 {
                     int val = isCities ? prefab.CitiesValue : prefab.Value;
@@ -168,10 +175,9 @@ namespace StackMenu
             }
 
             Vector3 spawnPosition = root.transform.position;
-            GameBoard currentBoard = root.MyBoard ?? WorldManager.instance?.CurrentBoard;
+            GameBoard? currentBoard = root.MyBoard ?? WorldManager.instance?.CurrentBoard;
             bool isCities = currentBoard != null && currentBoard.Location == Location.Cities;
-
-            List<string> uniqueNames = new List<string>();
+            List<string> savedData = new List<string>();
             int totalValue = 0;
 
             // Thu thập dữ liệu từ tất cả các card trong stack
@@ -179,26 +185,22 @@ namespace StackMenu
             {
                 if (c == null || c.CardData == null) continue;
 
-                // 1. Thu thập tên (không trùng nhau)
-                string name = c.CardData.Name;
-                if (string.IsNullOrEmpty(name)) name = c.CardData.FullName;
-                if (!string.IsNullOrEmpty(name) && !uniqueNames.Contains(name))
-                {
-                    uniqueNames.Add(name);
-                }
+
 
                 // 2. Tính giá trị
                 int val = isCities ? c.CardData.CitiesValue : c.CardData.GetValue();
-                if (val == 0 && c.CardData.Id == "coin")
-                if (val > 0) totalValue += val;
+                if (c.CardData.Id == "gold" || c.CardData.Id == "shell")
+                {
+                    totalValue += 1;
+                }
+                if (val > 0)
+                {
+                    totalValue += val;
+                }
 
                 // Chuyển đổi card thành SavedCard
-                SavedCard saved = c.ToSavedCard();
-                saved.ParentUniqueId = null;
+                savedData.Add(c.CardData.Id);
             }
-
-            // Tạo tên mới từ tối đa 3 tên không trùng nhau
-            string newCardName = string.Join(" + ", uniqueNames.Take(3));
 
             // Xóa/Phá hủy toàn bộ các card cũ trong stack
             for (int i = stack.Count - 1; i >= 0; i--)
@@ -212,13 +214,13 @@ namespace StackMenu
             }
 
             // Tạo card mới dựa theo PrefabId của root card
-            CardData newCardData = WorldManager.instance.CreateCard(
+            CompactCard? newCardData = WorldManager.instance?.CreateCard(
                 spawnPosition, 
                 "stackmenu_compactcard", 
                 faceUp: true, 
                 checkAddToStack: false, 
                 playSound: false
-            );
+            ) as CompactCard;
 
             if (newCardData != null && newCardData.MyGameCard != null)
             {
@@ -229,15 +231,21 @@ namespace StackMenu
                 if (isCities)
                 {
                     newCardData.CitiesValue = totalValue;
+                    newCardData.SavedCitiesValue = totalValue;
                 }
                 else
                 {
                     newCardData.Value = totalValue;
+                    newCardData.SavedValue = totalValue;
                 }
 
-                // Gán ExtraData để có thể Uncompact (chứa danh sách SavedCard)
-                SetExtraData(newCardData, CompactedKey, true);
+                // Thêm dữ liệu đã lưu vào CompactCard
+                newCardData.SetCompactedData(savedData);
+                newCardData.IconCardId = root.CardData.Id;
+                newCardData.Icon = root.CardData.Icon;
+                newCard.CardData.descriptionOverride = string.Join(" + ", savedData);
 
+                newCard.UpdateIcon();
                 UpdateBadge(newCard);
             }
 
@@ -257,54 +265,32 @@ namespace StackMenu
             GameCard root = card.GetRootCard();
             if (root == null || root.CardData == null) return;
 
-            List<SavedCard> savedCards = GetStoredCards(root.CardData);
             Vector3 spawnPos = root.transform.position;
-            GameBoard board = root.MyBoard ?? WorldManager.instance?.CurrentBoard;
-
+            GameBoard? board = root.MyBoard ?? WorldManager.instance?.CurrentBoard;
+            List<string> savedData = new List<string>();
             // Xóa card compacted hiện tại
             root.RemoveFromStack();
             root.DestroyCard(spawnSmoke: false, playSound: false);
 
-            if (savedCards != null && savedCards.Count > 0 && WorldManager.instance != null)
+            if (root.CardData is CompactCard compactCard)
             {
-                GameCard previousCard = null;
+                savedData = compactCard.CompactedData;
+            }
 
-                foreach (SavedCard saved in savedCards)
+            if (savedData != null && savedData.Count > 0 && WorldManager.instance != null)
+            {
+                GameCard? previousCard = null;
+
+                foreach (string saved in savedData)
                 {
-                    CardData createdCardData = WorldManager.instance.CreateCard(spawnPos, saved.CardPrefabId, saved.FaceUp, checkAddToStack: false, playSound: false);
+                    CardData createdCardData = WorldManager.instance.CreateCard(spawnPos, saved, true, checkAddToStack: false, playSound: false);
                     if (createdCardData == null || createdCardData.MyGameCard == null) continue;
 
-                    GameCard newCard = createdCardData.MyGameCard;
-                    newCard.MyBoard = board;
-
-                    if (saved.ExtraCardData != null && saved.ExtraCardData.Count > 0)
+                    if(previousCard != null)
                     {
-                        createdCardData.SetExtraCardData(saved.ExtraCardData);
+                        createdCardData.MyGameCard.SetParent(previousCard);
                     }
-                    if (saved.IsFoil)
-                    {
-                        createdCardData.SetFoil();
-                    }
-                    createdCardData.IsDamaged = saved.IsDamaged;
-                    createdCardData.DamageType = saved.DamageType;
-
-                    if (saved.StatusEffects != null && saved.StatusEffects.Count > 0)
-                    {
-                        List<StatusEffect> list = saved.StatusEffects.Select((SavedStatusEffect x) => StatusEffect.FromSavedStatusEffect(x)).ToList();
-                        list.RemoveAll((StatusEffect x) => x == null);
-                        foreach (StatusEffect item in list)
-                        {
-                            item.ParentCard = createdCardData;
-                        }
-                        createdCardData.StatusEffects = list;
-                        newCard.StatusEffectsChanged();
-                    }
-
-                    if (previousCard != null)
-                    {
-                        newCard.SetParent(previousCard);
-                    }
-                    previousCard = newCard;
+                    previousCard = createdCardData.MyGameCard;
                 }
             }
 
@@ -346,12 +332,12 @@ namespace StackMenu
                 if (card.CardNameText != null)
                 {
                     tmp.font = card.CardNameText.font;
-                    tmp.fontSize = card.CardNameText.fontSize * 0.8f;
+                    tmp.fontSize = card.CardNameText.fontSize * 0.2f;
                 }
-                tmp.alignment = TextAlignmentOptions.TopRight;
+                tmp.alignment = TextAlignmentOptions.TopGeoAligned;
                 tmp.color = new Color(1f, 0.85f, 0.2f, 1f);
-                tmp.rectTransform.sizeDelta = new Vector2(2f, 0.5f);
-                tmp.rectTransform.localPosition = new Vector3(0.42f, 0.48f, -0.01f);
+                tmp.rectTransform.sizeDelta = new Vector2(1f, 0.5f);
+                tmp.rectTransform.localPosition = new Vector3(0f, 0.1f, -0.01f);
                 tmp.rectTransform.localRotation = Quaternion.identity;
             }
             else
@@ -362,15 +348,15 @@ namespace StackMenu
             string text = "";
             if (pinned && compacted)
             {
-                text = $"📌 [x{compactCount}]";
+                text = $"[•] [x{compactCount}]";
             }
             else if (pinned)
             {
-                text = "📌";
+                text = "[•]";
             }
             else if (compacted)
             {
-                text = $"📦 [x{compactCount}]";
+                text = $"[ ] [x{compactCount}]";
             }
 
             if (tmp != null)
@@ -421,6 +407,10 @@ namespace StackMenu
                     }
                     else if (IsCompacted(card))
                     {
+                        if (card.CardData is CompactCard compactCard)
+                        {
+                            compactCard.UpdateVisuals();
+                        }
                         UpdateBadge(card);
                     }
                 }
@@ -463,7 +453,7 @@ namespace StackMenu
         }
 
         #region ExtraData Helpers
-        public static ExtraCardData GetExtraData(CardData cardData, string attributeId)
+        public static ExtraCardData? GetExtraData(CardData cardData, string attributeId)
         {
             return cardData.LeftoverExtraData?.FirstOrDefault(x => x.AttributeId == attributeId);
         }
