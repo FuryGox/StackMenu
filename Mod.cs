@@ -14,12 +14,29 @@ namespace StackMenu
 
         public override void Ready()
         {
+            try
+            {
+                Harmony.PatchAll();
+                Logger.Log("StackMenuMod Harmony patches applied.");
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"StackMenuMod failed to apply Harmony patches: {ex.Message}");
+            }
             Logger.Log("StackMenuMod Ready called.");
         }
 
         private void Update()
         {
-            if (WorldManager.instance == null || Mouse.current == null)
+            if (WorldManager.instance == null)
+            {
+                return;
+            }
+
+            // Keep pinned cards anchored and badges synchronized
+            CardMenu.UpdateAll();
+
+            if (Mouse.current == null)
             {
                 return;
             }
@@ -28,20 +45,47 @@ namespace StackMenu
             if (Mouse.current.rightButton.wasPressedThisFrame)
             {
                 GameCard hoveredCard = WorldManager.instance.HoveredCard;
-                if (hoveredCard != null)
+                if (hoveredCard != null && hoveredCard.CardData != null)
                 {
                     var stack = hoveredCard.GetAllCardsInStack();
-                    if (stack.Count > 1)
+                    var items = new List<MenuItem>();
+
+                    // --- Card Menu (Top Section) ---
+                    bool isPinned = CardMenu.IsPinned(hoveredCard);
+                    if (isPinned)
                     {
-                        var options = new List<(string Label, Action OnClick)>
-                        {
-                            ("Sort by Name", () => { StackSorter.Sort(hoveredCard, StackSortOption.Name); menu.Hide(); }),
-                            ("Sort by Value", () => { StackSorter.Sort(hoveredCard, StackSortOption.Value); menu.Hide(); }),
-                            ("Sort by Type", () => { StackSorter.Sort(hoveredCard, StackSortOption.Type); menu.Hide(); }),
-                            ("Split All to Each Stack", () => { StackSorter.SplitAllToEachStack(hoveredCard); menu.Hide(); }),
-                            ("Split All", () => { StackSorter.SplitAll(hoveredCard); menu.Hide(); }),
-                        };
-                        menu.Show(options, Mouse.current.position.ReadValue());
+                        items.Add(MenuItem.Action("Unpin Card", () => CardMenu.UnpinCard(hoveredCard)));
+                    }
+                    else
+                    {
+                        items.Add(MenuItem.Action("Pin Card", () => CardMenu.PinCard(hoveredCard)));
+                    }
+
+                    if (CardMenu.IsCompacted(hoveredCard))
+                    {
+                        items.Add(MenuItem.Action("Unpack", () => CardMenu.UnpackStack(hoveredCard)));
+                    }
+                    else if (stack != null && stack.Count > 1)
+                    {
+                        items.Add(MenuItem.Action("Compact Stack", () => CardMenu.CompactStack(hoveredCard)));
+                    }
+
+                    // --- Stack Menu (Bottom Section) ---
+                    if (stack != null && stack.Count > 1)
+                    {
+                        // Separator line between Card Menu and Stack Menu
+                        items.Add(MenuItem.Separator());
+
+                        items.Add(MenuItem.Action("Sort by Name", () => StackSorter.Sort(hoveredCard, StackSortOption.Name)));
+                        items.Add(MenuItem.Action("Sort by Value", () => StackSorter.Sort(hoveredCard, StackSortOption.Value)));
+                        items.Add(MenuItem.Action("Sort by Type", () => StackSorter.Sort(hoveredCard, StackSortOption.Type)));
+                        items.Add(MenuItem.Action("Split All to Each Stack", () => StackSorter.SplitAllToEachStack(hoveredCard)));
+                        items.Add(MenuItem.Action("Split All", () => StackSorter.SplitAll(hoveredCard)));
+                    }
+
+                    if (items.Count > 0)
+                    {
+                        menu.Show(items, Mouse.current.position.ReadValue());
                     }
                 }
             }

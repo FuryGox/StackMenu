@@ -1,0 +1,10 @@
+{
+    "$schema": "../schemas/card.schema.json",
+    "icon": "../Icons/container_box_small.png",
+    "value": 1,
+    "type": "Building",
+    "script": "StackMenu.CompactCard",
+    "id": "stackmenu_compactcard",
+    "nameTerm": "stackmenu_cardcompact_name",
+    "descriptionTerm": "stackmenu_cardcompact_description"
+}
