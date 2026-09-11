@@ -180,14 +180,10 @@ namespace StackMenu
             List<string> savedData = new List<string>();
             int totalValue = 0;
 
-            // Thu thập dữ liệu từ tất cả các card trong stack
             foreach (GameCard c in stack)
             {
                 if (c == null || c.CardData == null) continue;
 
-
-
-                // 2. Tính giá trị
                 int val = isCities ? c.CardData.CitiesValue : c.CardData.GetValue();
                 if (c.CardData.Id == "gold" || c.CardData.Id == "shell")
                 {
@@ -198,11 +194,9 @@ namespace StackMenu
                     totalValue += val;
                 }
 
-                // Chuyển đổi card thành SavedCard
                 savedData.Add(c.CardData.Id);
             }
 
-            // Xóa/Phá hủy toàn bộ các card cũ trong stack
             for (int i = stack.Count - 1; i >= 0; i--)
             {
                 GameCard c = stack[i];
@@ -213,7 +207,6 @@ namespace StackMenu
                 }
             }
 
-            // Tạo card mới dựa theo PrefabId của root card
             CompactCard? newCardData = WorldManager.instance?.CreateCard(
                 spawnPosition, 
                 "stackmenu_compactcard", 
@@ -227,7 +220,6 @@ namespace StackMenu
                 GameCard newCard = newCardData.MyGameCard;
                 newCard.MyBoard = currentBoard;
 
-                // Gán tổng giá trị (Total Value)
                 if (isCities)
                 {
                     newCardData.CitiesValue = totalValue;
@@ -239,7 +231,6 @@ namespace StackMenu
                     newCardData.SavedValue = totalValue;
                 }
 
-                // Thêm dữ liệu đã lưu vào CompactCard
                 newCardData.SetCompactedData(savedData);
                 newCardData.IconCardId = root.CardData.Id;
                 newCardData.Icon = root.CardData.Icon;
@@ -268,7 +259,7 @@ namespace StackMenu
             Vector3 spawnPos = root.transform.position;
             GameBoard? board = root.MyBoard ?? WorldManager.instance?.CurrentBoard;
             List<string> savedData = new List<string>();
-            // Xóa card compacted hiện tại
+
             root.RemoveFromStack();
             root.DestroyCard(spawnSmoke: false, playSound: false);
 
@@ -371,7 +362,6 @@ namespace StackMenu
 
             var allCards = WorldManager.instance.AllCards;
 
-            // Remove destroyed cards from pinned tracking
             if (pinnedCards.Count > 0)
             {
                 var dead = pinnedCards.Keys.Where(c => c == null || c.Destroyed).ToList();
@@ -386,7 +376,6 @@ namespace StackMenu
                 GameCard card = allCards[i];
                 if (card == null || card.Destroyed || card.CardData == null) continue;
 
-                // Restore/sync newly seen cards loaded from save
                 if (!knownCards.Contains(card))
                 {
                     knownCards.Add(card);
@@ -415,7 +404,6 @@ namespace StackMenu
                     }
                 }
 
-                // Process pinned card physics / drag updates
                 if (IsPinned(card))
                 {
                     if (card.PushEnabled)
@@ -445,7 +433,6 @@ namespace StackMenu
                 }
             }
 
-            // Periodically clean up knownCards
             if (knownCards.Count > allCards.Count + 100)
             {
                 knownCards.RemoveWhere(c => c == null || c.Destroyed);

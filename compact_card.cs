@@ -138,6 +138,22 @@ namespace StackMenu
                 }
                 UpdateVisuals();
             }
+
+            var otherCards = ChildrenMatchingPredicate(childCard => childCard.Id != "stackmenu_compactcard");
+            if (otherCards != null && otherCards.Count > 0)
+            {
+                foreach (var data in otherCards)
+                {
+                    AddCompactedData(data.Id);
+                }
+                SavedValue += otherCards.Sum(card => card.Value);
+                SavedCitiesValue += otherCards.Sum(card => card.CitiesValue);
+
+                foreach (var data in otherCards)
+                {
+                    data.MyGameCard.DestroyCard();
+                }
+            }
         }
     }
 }

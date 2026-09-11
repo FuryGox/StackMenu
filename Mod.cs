@@ -11,9 +11,41 @@ namespace StackMenu
     public class StackMenuMod : Mod
     {
         private readonly CardStackMenu menu = new CardStackMenu();
+        public static ConfigEntry<bool> AddCardToBottomConfig;
+
+        public static ConfigEntry<string> pin_unpin_shortcut;
+        public static ConfigEntry<string> compact_uncompact_shortcut;
+        public static ConfigEntry<string> sort_by_name_shortcut;
+        public static ConfigEntry<string> sort_by_value_shortcut;
+        public static ConfigEntry<string> sort_by_type_shortcut;
+
+        public static ConfigEntry<string> slip_all_card_shortcut;
+        public static ConfigEntry<string> slip_all_card_to_stack_shortcut;
 
         public override void Ready()
         {
+            AddCardToBottomConfig = Config.GetEntry<bool>("add_card_to_bottom", false);
+            AddCardToBottomConfig.UI.Name = "Add Card to Bottom of Stack";
+            //AddCardToBottomConfig.UI.Tooltip = "When enabled, dragged cards will be placed at the bottom of the target stack instead of on top.";
+            AddCardToBottomConfig.UI.Tooltip = "Currently disabled";
+
+            pin_unpin_shortcut = Config.GetEntry<string>("pin_unpin_shortcut", "P");
+            compact_uncompact_shortcut = Config.GetEntry<string>("compact_uncompact_shortcut", "C");
+            sort_by_name_shortcut = Config.GetEntry<string>("sort_by_name_shortcut", "N");
+            sort_by_value_shortcut = Config.GetEntry<string>("sort_by_value_shortcut", "V");
+            sort_by_type_shortcut = Config.GetEntry<string>("sort_by_type_shortcut", "T");
+
+            slip_all_card_shortcut = Config.GetEntry<string>("slip_all_card_shortcut", "S");
+            slip_all_card_to_stack_shortcut = Config.GetEntry<string>("slip_all_card_to_stack_shortcut", "A");
+
+            pin_unpin_shortcut.UI.Name = "Pin/Unpin Card";
+            compact_uncompact_shortcut.UI.Name = "Compact/Uncompact Card";
+            sort_by_name_shortcut.UI.Name = "Sort by Name";
+            sort_by_value_shortcut.UI.Name = "Sort by Value";
+            sort_by_type_shortcut.UI.Name = "Sort by Type";
+
+            slip_all_card_shortcut.UI.Name = "Slip All Cards";
+            slip_all_card_to_stack_shortcut.UI.Name = "Slip All Cards to Stack";
             try
             {
                 Harmony.PatchAll();
@@ -36,6 +68,11 @@ namespace StackMenu
             // Keep pinned cards anchored and badges synchronized
             CardMenu.UpdateAll();
 
+            if (menu.IsOpen && menu.UpdateInput())
+            {
+                return;
+            }
+
             if (Mouse.current == null)
             {
                 return;
@@ -54,20 +91,20 @@ namespace StackMenu
                     bool isPinned = CardMenu.IsPinned(hoveredCard);
                     if (isPinned)
                     {
-                        items.Add(MenuItem.Action("Unpin Card", () => CardMenu.UnpinCard(hoveredCard)));
+                        items.Add(MenuItem.Action("Unpin Card", () => CardMenu.UnpinCard(hoveredCard), Key.P));
                     }
                     else
                     {
-                        items.Add(MenuItem.Action("Pin Card", () => CardMenu.PinCard(hoveredCard)));
+                        items.Add(MenuItem.Action("Pin Card", () => CardMenu.PinCard(hoveredCard), Key.P));
                     }
 
                     if (CardMenu.IsCompacted(hoveredCard))
                     {
-                        items.Add(MenuItem.Action("Unpack", () => CardMenu.UnpackStack(hoveredCard)));
+                        items.Add(MenuItem.Action("Unpack", () => CardMenu.UnpackStack(hoveredCard), Key.C));
                     }
                     else if (stack != null && stack.Count > 1)
                     {
-                        items.Add(MenuItem.Action("Compact Stack", () => CardMenu.CompactStack(hoveredCard)));
+                        items.Add(MenuItem.Action("Compact Stack", () => CardMenu.CompactStack(hoveredCard), Key.C));
                     }
 
                     // --- Stack Menu (Bottom Section) ---
@@ -76,11 +113,11 @@ namespace StackMenu
                         // Separator line between Card Menu and Stack Menu
                         items.Add(MenuItem.Separator());
 
-                        items.Add(MenuItem.Action("Sort by Name", () => StackSorter.Sort(hoveredCard, StackSortOption.Name)));
-                        items.Add(MenuItem.Action("Sort by Value", () => StackSorter.Sort(hoveredCard, StackSortOption.Value)));
-                        items.Add(MenuItem.Action("Sort by Type", () => StackSorter.Sort(hoveredCard, StackSortOption.Type)));
-                        items.Add(MenuItem.Action("Split All to Each Stack", () => StackSorter.SplitAllToEachStack(hoveredCard)));
-                        items.Add(MenuItem.Action("Split All", () => StackSorter.SplitAll(hoveredCard)));
+                        items.Add(MenuItem.Action("Sort by Name", () => StackSorter.Sort(hoveredCard, StackSortOption.Name), Key.N));
+                        items.Add(MenuItem.Action("Sort by Value", () => StackSorter.Sort(hoveredCard, StackSortOption.Value), Key.V));
+                        items.Add(MenuItem.Action("Sort by Type", () => StackSorter.Sort(hoveredCard, StackSortOption.Type), Key.T));
+                        items.Add(MenuItem.Action("Split All to Each Stack", () => StackSorter.SplitAllToEachStack(hoveredCard), Key.E));
+                        items.Add(MenuItem.Action("Split All", () => StackSorter.SplitAll(hoveredCard), Key.S));
                     }
 
                     if (items.Count > 0)
@@ -97,4 +134,142 @@ namespace StackMenu
             }
         }
     }
+
+    // [HarmonyPatch(typeof(WorldManager), nameof(WorldManager.CheckIfCanAddOnStack))]
+    // public static class WorldManager_CheckIfCanAddOnStack_Patch
+    // {
+    //     public static bool Prefix(WorldManager __instance, GameCard topCard, ref bool __result)
+    //     {
+    //         if (StackMenuMod.AddCardToBottomConfig != null && StackMenuMod.AddCardToBottomConfig.Value)
+    //         {
+    //             // Bottom insertion mode: topCard will become the parent of the root of the target stack
+    //             List<GameCard> overlappingCards = topCard.GetOverlappingCards();
+    //             float num = float.MaxValue;
+    //             GameCard targetRoot = null;
+
+    //             foreach (GameCard item in overlappingCards)
+    //             {
+    //                 if (item == topCard || item.IsChildOf(topCard))
+    //                 {
+    //                     continue;
+    //                 }
+
+    //                 GameCard rootCard = item.GetRootCard();
+    //                 if (rootCard == topCard || rootCard.IsChildOf(topCard))
+    //                 {
+    //                     continue;
+    //                 }
+
+    //                 // Check if topCard (or bottom of topCard stack) can have rootCard on top
+    //                 GameCard topCardLeaf = topCard.GetLeafCard();
+    //                 GameCard cardWithStatus = rootCard.GetCardWithStatusInStack();
+    //                 if (cardWithStatus != null && !cardWithStatus.CardData.CanHaveCardsWhileHasStatus())
+    //                 {
+    //                     continue;
+    //                 }
+
+    //                 if (topCardLeaf.CardData.CanHaveCardOnTop(rootCard.CardData))
+    //                 {
+    //                     Vector3 vector = topCard.transform.position - item.transform.position;
+    //                     vector.y = 0f;
+    //                     if (vector.magnitude < num)
+    //                     {
+    //                         targetRoot = rootCard;
+    //                         num = vector.magnitude;
+    //                     }
+    //                 }
+    //             }
+
+    //             if (targetRoot != null)
+    //             {
+    //                 GameCard topCardLeaf = topCard.GetLeafCard();
+    //                 targetRoot.SetParent(topCardLeaf);
+    //                 __result = true;
+    //                 return false;
+    //             }
+
+    //             __result = false;
+    //             return false;
+    //         }
+    //     }
+    // }
+    //         }
+
+    //         // Default top insertion mode (vanilla behavior)
+    //         List<GameCard> defaultOverlappingCards = topCard.GetOverlappingCards();
+    //         float defaultNum = float.MaxValue;
+    //         GameCard defaultGameCard = null;
+
+    //         foreach (GameCard item in defaultOverlappingCards)
+    //         {
+    //             if (item == topCard || item.IsChildOf(topCard))
+    //             {
+    //                 continue;
+    //             }
+    //             bool num2 = topCard == item.removedChild;
+    //             GameCard leafCard = item.GetLeafCard();
+    //             if (!num2)
+    //             {
+    //                 GameCard cardWithStatusInStack = leafCard.GetCardWithStatusInStack();
+    //                 if (cardWithStatusInStack != null && !cardWithStatusInStack.CardData.CanHaveCardsWhileHasStatus())
+    //                 {
+    //                     continue;
+    //                 }
+    //             }
+    //             if (leafCard.CardData.CanHaveCardOnTop(topCard.CardData))
+    //             {
+    //                 Vector3 vector = topCard.transform.position - item.transform.position;
+    //                 vector.y = 0f;
+    //                 if (vector.magnitude < defaultNum)
+    //                 {
+    //                     defaultGameCard = leafCard;
+    //                     defaultNum = vector.magnitude;
+    //                 }
+    //             }
+    //         }
+
+    //         if (defaultGameCard != null)
+    //         {
+    //             topCard.SetParent(defaultGameCard);
+    //             __result = true;
+    //             return false;
+    //         }
+
+    //         __result = false;
+    //         return false;
+    //     }
+    // }
+
+    // [HarmonyPatch(typeof(WorldManager), nameof(WorldManager.CreateCardStack))]
+    // public static class WorldManager_CreateCardStack_Patch
+    // {
+    //     public static bool Prefix(WorldManager __instance, Vector3 pos, int amount, string cardId, bool checkAddToStack, ref GameCard __result)
+    //     {
+    //         if (amount == 0)
+    //         {
+    //             __result = null;
+    //             return false;
+    //         }
+
+    //         GameCard gameCard = null;
+    //         while (amount > 0)
+    //         {
+    //             int num = Mathf.Min(amount, 10);
+    //             gameCard = null;
+    //             for (int i = 0; i < num; i++)
+    //             {
+    //                 GameCard myGameCard = __instance.CreateCard(pos, cardId, faceUp: true, checkAddToStack).MyGameCard;
+    //                 if (gameCard != null)
+    //                 {
+    //                     gameCard.SetParent(myGameCard);
+    //                 }
+    //                 gameCard = myGameCard;
+    //             }
+    //             amount -= num;
+    //         }
+
+    //         __result = gameCard;
+    //         return false;
+    //     }
+    // }
 }

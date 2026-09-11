@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 namespace StackMenu
@@ -10,8 +11,18 @@ namespace StackMenu
         public string Label { get; set; } = "";
         public Action? OnClick { get; set; }
         public bool IsSeparator { get; set; }
+        public Key? ShortcutKey { get; set; }
+        public string? ShortcutLabel { get; set; }
 
-        public static MenuItem Action(string label, Action onClick) => new MenuItem { Label = label, OnClick = onClick, IsSeparator = false };
+        public static MenuItem Action(string label, Action onClick, Key? shortcutKey = null, string? shortcutLabel = null) => new MenuItem
+        {
+            Label = label,
+            OnClick = onClick,
+            IsSeparator = false,
+            ShortcutKey = shortcutKey,
+            ShortcutLabel = shortcutLabel ?? (shortcutKey.HasValue ? shortcutKey.Value.ToString() : null)
+        };
+
         public static MenuItem Separator() => new MenuItem { IsSeparator = true };
     }
 
@@ -19,6 +30,7 @@ namespace StackMenu
     public class CardStackMenu
     {
         private GameObject? root;
+        private List<MenuItem>? currentItems;
 
         public bool IsOpen => root != null;
 
@@ -38,6 +50,8 @@ namespace StackMenu
 
             if (items == null || items.Count == 0) return;
 
+            currentItems = items;
+
             root = new GameObject("StackMenuCanvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             var canvas = root.GetComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
@@ -56,7 +70,7 @@ namespace StackMenu
 
             float rowHeight = 28f;
             float separatorHeight = 8f;
-            float width = 175f;
+            float width = 200f;
 
             float totalHeight = 8f;
             foreach (var item in items)
@@ -141,15 +155,66 @@ namespace StackMenu
                     textRect.anchorMin = Vector2.zero;
                     textRect.anchorMax = Vector2.one;
                     textRect.offsetMin = new Vector2(8f, 0f);
-                    textRect.offsetMax = new Vector2(-4f, 0f);
+                    textRect.offsetMax = new Vector2(string.IsNullOrEmpty(item.ShortcutLabel) ? -4f : -30f, 0f);
+
+                    if (!string.IsNullOrEmpty(item.ShortcutLabel))
+                    {
+                        var shortcutGO = new GameObject("Shortcut", typeof(Text));
+                        shortcutGO.transform.SetParent(rowGO.transform, false);
+                        var shortcutText = shortcutGO.GetComponent<Text>();
+                        shortcutText.font = font;
+                        shortcutText.fontSize = 13;
+                        shortcutText.color = new Color(1f, 1f, 1f, 0.45f);
+                        shortcutText.alignment = TextAnchor.MiddleRight;
+                        shortcutText.raycastTarget = false;
+                        shortcutText.text = item.ShortcutLabel;
+
+                        var shortcutRect = shortcutGO.GetComponent<RectTransform>();
+                        shortcutRect.anchorMin = Vector2.zero;
+                        shortcutRect.anchorMax = Vector2.one;
+                        shortcutRect.offsetMin = new Vector2(8f, 0f);
+                        shortcutRect.offsetMax = new Vector2(-8f, 0f);
+                    }
 
                     currentY += rowHeight;
                 }
             }
         }
 
+        public bool UpdateInput()
+        {
+            if (!IsOpen || currentItems == null) return false;
+
+            if (Keyboard.current != null)
+            {
+                if (Keyboard.current.escapeKey.wasPressedThisFrame)
+                {
+                    Hide();
+                    return true;
+                }
+
+                foreach (var item in currentItems)
+                {
+                    if (item.ShortcutKey.HasValue && item.OnClick != null)
+                    {
+                        var keyControl = Keyboard.current[item.ShortcutKey.Value];
+                        if (keyControl != null && keyControl.wasPressedThisFrame)
+                        {
+                            var onClick = item.OnClick;
+                            Hide();
+                            onClick.Invoke();
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            return false;
+        }
+
         public void Hide()
         {
+            currentItems = null;
             if (root != null)
             {
                 UnityEngine.Object.Destroy(root);
