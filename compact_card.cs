@@ -106,7 +106,11 @@ namespace StackMenu
 
         protected override bool CanHaveCard(CardData otherCard)
         {
-            return CompactedData.Contains(otherCard.Id);
+            if (otherCard.MyCardType == CardType.Fish || otherCard.MyCardType == CardType.Humans || otherCard.MyCardType == CardType.Mobs)
+            {
+                return false;
+            }
+            return true;
         }
 
         public override void UpdateCard()

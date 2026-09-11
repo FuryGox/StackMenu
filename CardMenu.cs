@@ -21,14 +21,19 @@ namespace StackMenu
         private static readonly Dictionary<GameCard, Vector3> pinnedCards = new Dictionary<GameCard, Vector3>();
         private static readonly HashSet<GameCard> knownCards = new HashSet<GameCard>();
 
+        public static bool IsCardDataPinned(CardData cardData)
+        {
+            if (cardData == null || cardData.LeftoverExtraData == null) return false;
+            return cardData.LeftoverExtraData.Any(x => x.AttributeId == PinnedKey && x.BoolValue);
+        }
+
         public static bool IsPinned(GameCard card)
         {
             if (card == null || card.CardData == null) return false;
             GameCard root = card.GetRootCard();
             if (root == null || root.CardData == null) return false;
 
-            if (root.CardData.LeftoverExtraData != null &&
-                root.CardData.LeftoverExtraData.Any(x => x.AttributeId == PinnedKey && x.BoolValue))
+            if (IsCardDataPinned(root.CardData))
             {
                 return true;
             }
@@ -41,6 +46,20 @@ namespace StackMenu
             GameCard root = card.GetRootCard();
             if (root == null || root.CardData == null) return;
 
+            foreach (var overlappingCard in root.GetAllCardsInStack())
+            {
+                if (overlappingCard != null && overlappingCard.CardData != null && overlappingCard != root)
+                {
+                    RemoveExtraData(overlappingCard.CardData, PinnedKey);
+                    RemoveExtraData(overlappingCard.CardData, PinnedPosXKey);
+                    RemoveExtraData(overlappingCard.CardData, PinnedPosYKey);
+                    RemoveExtraData(overlappingCard.CardData, PinnedPosZKey);
+                    overlappingCard.PushEnabled = true;
+                    pinnedCards.Remove(overlappingCard);
+                    UpdateBadge(overlappingCard);
+                }
+            }
+
             Vector3 pos = root.transform.position;
 
             SetExtraData(root.CardData, PinnedKey, true);
@@ -49,8 +68,7 @@ namespace StackMenu
             SetExtraData(root.CardData, PinnedPosZKey, pos.z);
 
             root.PushEnabled = false;
-            root.CardData.MyGameCard.BeingDragged = false;
-            
+
             pinnedCards[root] = pos;
             UpdateBadge(root);
 
@@ -66,10 +84,19 @@ namespace StackMenu
             GameCard root = card.GetRootCard();
             if (root == null || root.CardData == null) return;
 
-            RemoveExtraData(root.CardData, PinnedKey);
-            RemoveExtraData(root.CardData, PinnedPosXKey);
-            RemoveExtraData(root.CardData, PinnedPosYKey);
-            RemoveExtraData(root.CardData, PinnedPosZKey);
+            foreach (var c in root.GetAllCardsInStack())
+            {
+                if (c != null && c.CardData != null)
+                {
+                    RemoveExtraData(c.CardData, PinnedKey);
+                    RemoveExtraData(c.CardData, PinnedPosXKey);
+                    RemoveExtraData(c.CardData, PinnedPosYKey);
+                    RemoveExtraData(c.CardData, PinnedPosZKey);
+                    c.PushEnabled = true;
+                    pinnedCards.Remove(c);
+                    UpdateBadge(c);
+                }
+            }
 
             root.PushEnabled = true;
             pinnedCards.Remove(root);
@@ -209,10 +236,10 @@ namespace StackMenu
             }
 
             CompactCard? newCardData = WorldManager.instance?.CreateCard(
-                spawnPosition, 
-                "stackmenu_compactcard", 
-                faceUp: true, 
-                checkAddToStack: false, 
+                spawnPosition,
+                "stackmenu_compactcard",
+                faceUp: true,
+                checkAddToStack: false,
                 playSound: false
             ) as CompactCard;
 
@@ -278,7 +305,7 @@ namespace StackMenu
                     CardData createdCardData = WorldManager.instance.CreateCard(spawnPos, saved, true, checkAddToStack: false, playSound: false);
                     if (createdCardData == null || createdCardData.MyGameCard == null) continue;
 
-                    if(previousCard != null)
+                    if (previousCard != null)
                     {
                         createdCardData.MyGameCard.SetParent(previousCard);
                     }
@@ -298,10 +325,10 @@ namespace StackMenu
 
         public static void UpdateBadge(GameCard card)
         {
-            if (card == null) return;
+            if (card == null || card.CardData == null) return;
 
             Transform badgeTransform = card.transform.Find("StackMenuBadge");
-            bool pinned = IsPinned(card);
+            bool pinned = card.Parent == null && (IsCardDataPinned(card.CardData) || pinnedCards.ContainsKey(card));
             bool compacted = IsCompacted(card);
             int compactCount = GetCompactedCount(card);
 
@@ -365,9 +392,14 @@ namespace StackMenu
 
             if (pinnedCards.Count > 0)
             {
-                var dead = pinnedCards.Keys.Where(c => c == null || c.Destroyed).ToList();
+                var dead = pinnedCards.Keys.Where(c => c == null || c.Destroyed || c.Parent != null).ToList();
                 foreach (var d in dead)
                 {
+                    if (d != null && !d.Destroyed && d.Parent != null)
+                    {
+                        d.PushEnabled = true;
+                        UpdateBadge(d);
+                    }
                     pinnedCards.Remove(d);
                 }
             }
@@ -377,11 +409,13 @@ namespace StackMenu
                 GameCard card = allCards[i];
                 if (card == null || card.Destroyed || card.CardData == null) continue;
 
+                bool isRoot = card.Parent == null;
+
                 if (!knownCards.Contains(card))
                 {
                     knownCards.Add(card);
 
-                    if (IsPinned(card))
+                    if (isRoot && (IsCardDataPinned(card.CardData) || pinnedCards.ContainsKey(card)))
                     {
                         float? px = GetExtraDataFloat(card.CardData, PinnedPosXKey);
                         float? py = GetExtraDataFloat(card.CardData, PinnedPosYKey);
@@ -405,14 +439,16 @@ namespace StackMenu
                     }
                 }
 
-                if (IsPinned(card))
+                if (isRoot && pinnedCards.ContainsKey(card))
                 {
                     if (card.PushEnabled)
                     {
                         card.PushEnabled = false;
                     }
 
-                    if (card.BeingDragged)
+                    bool anyInStackDragged = card.GetAllCardsInStack().Any(c => c != null && c.BeingDragged);
+
+                    if (anyInStackDragged)
                     {
                         Vector3 currentPos = card.transform.position;
                         pinnedCards[card] = currentPos;
@@ -422,14 +458,11 @@ namespace StackMenu
                     }
                     else if (pinnedCards.TryGetValue(card, out Vector3 targetPos))
                     {
-                        if (card.Velocity.HasValue && card.Velocity.Value.sqrMagnitude > 0.001f)
+                        if (card.Velocity.HasValue)
                         {
                             card.Velocity = Vector3.zero;
                         }
-                        if ((card.transform.position - targetPos).sqrMagnitude > 0.0001f)
-                        {
-                            card.transform.position = Vector3.Lerp(card.transform.position, targetPos, Time.deltaTime * 20f);
-                        }
+                        card.transform.position = targetPos;
                     }
                 }
             }
