@@ -18,34 +18,31 @@ namespace StackMenu
         public static ConfigEntry<string> sort_by_name_shortcut;
         public static ConfigEntry<string> sort_by_value_shortcut;
         public static ConfigEntry<string> sort_by_type_shortcut;
-
         public static ConfigEntry<string> slip_all_card_shortcut;
         public static ConfigEntry<string> slip_all_card_to_stack_shortcut;
+
+        public static Key pin_unpin_key => KeybindSettingUI.ParseKey(pin_unpin_shortcut, Key.P);
+        public static Key compact_uncompact_key => KeybindSettingUI.ParseKey(compact_uncompact_shortcut, Key.C);
+        public static Key sort_by_name_key => KeybindSettingUI.ParseKey(sort_by_name_shortcut, Key.N);
+        public static Key sort_by_value_key => KeybindSettingUI.ParseKey(sort_by_value_shortcut, Key.V);
+        public static Key sort_by_type_key => KeybindSettingUI.ParseKey(sort_by_type_shortcut, Key.T);
+        public static Key slip_all_card_key => KeybindSettingUI.ParseKey(slip_all_card_shortcut, Key.S);
+        public static Key slip_all_card_to_stack_key => KeybindSettingUI.ParseKey(slip_all_card_to_stack_shortcut, Key.A);
 
         public override void Ready()
         {
             AddCardToBottomConfig = Config.GetEntry<bool>("add_card_to_bottom", false);
             AddCardToBottomConfig.UI.Name = "Add Card to Bottom of Stack";
-            //AddCardToBottomConfig.UI.Tooltip = "When enabled, dragged cards will be placed at the bottom of the target stack instead of on top.";
             AddCardToBottomConfig.UI.Tooltip = "Currently disabled";
 
-            pin_unpin_shortcut = Config.GetEntry<string>("pin_unpin_shortcut", "P");
-            compact_uncompact_shortcut = Config.GetEntry<string>("compact_uncompact_shortcut", "C");
-            sort_by_name_shortcut = Config.GetEntry<string>("sort_by_name_shortcut", "N");
-            sort_by_value_shortcut = Config.GetEntry<string>("sort_by_value_shortcut", "V");
-            sort_by_type_shortcut = Config.GetEntry<string>("sort_by_type_shortcut", "T");
+            pin_unpin_shortcut = SetupKeybindConfig("pin_unpin_shortcut", "Pin/Unpin Card", "P");
+            compact_uncompact_shortcut = SetupKeybindConfig("compact_uncompact_shortcut", "Compact/Unpack Card", "C");
+            sort_by_name_shortcut = SetupKeybindConfig("sort_by_name_shortcut", "Sort by Name", "N");
+            sort_by_value_shortcut = SetupKeybindConfig("sort_by_value_shortcut", "Sort by Value", "V");
+            sort_by_type_shortcut = SetupKeybindConfig("sort_by_type_shortcut", "Sort by Type", "T");
+            slip_all_card_shortcut = SetupKeybindConfig("slip_all_card_shortcut", "Split All Cards", "S");
+            slip_all_card_to_stack_shortcut = SetupKeybindConfig("slip_all_card_to_stack_shortcut", "Split All to Each Stack", "A");
 
-            slip_all_card_shortcut = Config.GetEntry<string>("slip_all_card_shortcut", "S");
-            slip_all_card_to_stack_shortcut = Config.GetEntry<string>("slip_all_card_to_stack_shortcut", "A");
-
-            pin_unpin_shortcut.UI.Name = "Pin/Unpin Card";
-            compact_uncompact_shortcut.UI.Name = "Compact/Uncompact Card";
-            sort_by_name_shortcut.UI.Name = "Sort by Name";
-            sort_by_value_shortcut.UI.Name = "Sort by Value";
-            sort_by_type_shortcut.UI.Name = "Sort by Type";
-
-            slip_all_card_shortcut.UI.Name = "Slip All Cards";
-            slip_all_card_to_stack_shortcut.UI.Name = "Slip All Cards to Stack";
             try
             {
                 Harmony.PatchAll();
@@ -56,6 +53,30 @@ namespace StackMenu
                 Logger.Log($"StackMenuMod failed to apply Harmony patches: {ex.Message}");
             }
             Logger.Log("StackMenuMod Ready called.");
+        }
+
+        private ConfigEntry<string> SetupKeybindConfig(string name, string displayName, string defaultKey)
+        {
+            var entry = Config.GetEntry<string>(name, defaultKey);
+            entry.UI.Name = displayName;
+            entry.UI.Hidden = true;
+            entry.UI.OnUI = (ConfigEntryBase entryBase) =>
+            {
+                if (PrefabManager.instance == null || ModOptionsScreen.instance == null) return;
+
+                var btn = UnityEngine.Object.Instantiate(PrefabManager.instance.ButtonPrefab, ModOptionsScreen.instance.ButtonsParent);
+                btn.transform.localScale = Vector3.one;
+                btn.transform.localPosition = Vector3.zero;
+                btn.transform.localRotation = Quaternion.identity;
+
+                var keybindUI = btn.gameObject.AddComponent<KeybindSettingUI>();
+                Key current = KeybindSettingUI.ParseKey(entry, Key.None);
+                keybindUI.Initialize(current, displayName, (newKey) =>
+                {
+                    entry.Value = newKey.ToString();
+                });
+            };
+            return entry;
         }
 
         private void Update()
@@ -91,20 +112,20 @@ namespace StackMenu
                     bool isPinned = CardMenu.IsPinned(hoveredCard);
                     if (isPinned)
                     {
-                        items.Add(MenuItem.Action("Unpin Card", () => CardMenu.UnpinCard(hoveredCard), Key.P));
+                        items.Add(MenuItem.Action("Unpin Card", () => CardMenu.UnpinCard(hoveredCard), pin_unpin_key));
                     }
                     else
                     {
-                        items.Add(MenuItem.Action("Pin Card", () => CardMenu.PinCard(hoveredCard), Key.P));
+                        items.Add(MenuItem.Action("Pin Card", () => CardMenu.PinCard(hoveredCard), pin_unpin_key));
                     }
 
                     if (CardMenu.IsCompacted(hoveredCard))
                     {
-                        items.Add(MenuItem.Action("Unpack", () => CardMenu.UnpackStack(hoveredCard), Key.C));
+                        items.Add(MenuItem.Action("Unpack", () => CardMenu.UnpackStack(hoveredCard), compact_uncompact_key));
                     }
                     else if (stack != null && stack.Count > 1)
                     {
-                        items.Add(MenuItem.Action("Compact Stack", () => CardMenu.CompactStack(hoveredCard), Key.C));
+                        items.Add(MenuItem.Action("Compact Stack", () => CardMenu.CompactStack(hoveredCard), compact_uncompact_key));
                     }
 
                     // --- Stack Menu (Bottom Section) ---
@@ -113,11 +134,11 @@ namespace StackMenu
                         // Separator line between Card Menu and Stack Menu
                         items.Add(MenuItem.Separator());
 
-                        items.Add(MenuItem.Action("Sort by Name", () => StackSorter.Sort(hoveredCard, StackSortOption.Name), Key.N));
-                        items.Add(MenuItem.Action("Sort by Value", () => StackSorter.Sort(hoveredCard, StackSortOption.Value), Key.V));
-                        items.Add(MenuItem.Action("Sort by Type", () => StackSorter.Sort(hoveredCard, StackSortOption.Type), Key.T));
-                        items.Add(MenuItem.Action("Split All to Each Stack", () => StackSorter.SplitAllToEachStack(hoveredCard), Key.E));
-                        items.Add(MenuItem.Action("Split All", () => StackSorter.SplitAll(hoveredCard), Key.S));
+                        items.Add(MenuItem.Action("Sort by Name", () => StackSorter.Sort(hoveredCard, StackSortOption.Name), sort_by_name_key));
+                        items.Add(MenuItem.Action("Sort by Value", () => StackSorter.Sort(hoveredCard, StackSortOption.Value), sort_by_value_key));
+                        items.Add(MenuItem.Action("Sort by Type", () => StackSorter.Sort(hoveredCard, StackSortOption.Type), sort_by_type_key));
+                        items.Add(MenuItem.Action("Split All to Each Stack", () => StackSorter.SplitAllToEachStack(hoveredCard), slip_all_card_to_stack_key));
+                        items.Add(MenuItem.Action("Split All", () => StackSorter.SplitAll(hoveredCard), slip_all_card_key));
                     }
 
                     if (items.Count > 0)
