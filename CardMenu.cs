@@ -50,6 +50,7 @@ namespace StackMenu
 
             root.PushEnabled = false;
             root.CardData.MyGameCard.BeingDragged = false;
+            
             pinnedCards[root] = pos;
             UpdateBadge(root);
 

@@ -106,7 +106,7 @@ namespace StackMenu
 
         protected override bool CanHaveCard(CardData otherCard)
         {
-            return true;
+            return CompactedData.Contains(otherCard.Id);
         }
 
         public override void UpdateCard()
