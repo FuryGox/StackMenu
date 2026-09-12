@@ -113,6 +113,15 @@ namespace StackMenu
             return true;
         }
 
+        public new bool CanHaveCardOnTop(CardData otherCard, bool isPrefab = false)
+        {
+            if (otherCard.MyCardType == CardType.Fish || otherCard.MyCardType == CardType.Humans || otherCard.MyCardType == CardType.Mobs)
+            {
+                return false;
+            }
+            return true;
+        }
+
         public override void UpdateCard()
         {
             base.UpdateCard();

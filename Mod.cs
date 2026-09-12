@@ -11,15 +11,16 @@ namespace StackMenu
     public class StackMenuMod : Mod
     {
         private readonly CardStackMenu menu = new CardStackMenu();
-        public static ConfigEntry<bool> AddCardToBottomConfig;
+        public static ConfigEntry<bool>? AddCardToBottomConfig;
 
-        public static ConfigEntry<string> pin_unpin_shortcut;
-        public static ConfigEntry<string> compact_uncompact_shortcut;
-        public static ConfigEntry<string> sort_by_name_shortcut;
-        public static ConfigEntry<string> sort_by_value_shortcut;
-        public static ConfigEntry<string> sort_by_type_shortcut;
-        public static ConfigEntry<string> slip_all_card_shortcut;
-        public static ConfigEntry<string> slip_all_card_to_stack_shortcut;
+        public static ConfigEntry<string>? pin_unpin_shortcut;
+        public static ConfigEntry<string>? compact_uncompact_shortcut;
+        public static ConfigEntry<string>? sort_by_name_shortcut;
+        public static ConfigEntry<string>? sort_by_value_shortcut;
+        public static ConfigEntry<string>? sort_by_type_shortcut;
+        public static ConfigEntry<string>? slip_all_card_shortcut;
+        public static ConfigEntry<string>? slip_all_card_to_stack_shortcut;
+        public static ConfigEntry<string>? badge_color_config;
 
         public static Key pin_unpin_key => KeybindSettingUI.ParseKey(pin_unpin_shortcut, Key.P);
         public static Key compact_uncompact_key => KeybindSettingUI.ParseKey(compact_uncompact_shortcut, Key.C);
@@ -28,6 +29,7 @@ namespace StackMenu
         public static Key sort_by_type_key => KeybindSettingUI.ParseKey(sort_by_type_shortcut, Key.T);
         public static Key slip_all_card_key => KeybindSettingUI.ParseKey(slip_all_card_shortcut, Key.S);
         public static Key slip_all_card_to_stack_key => KeybindSettingUI.ParseKey(slip_all_card_to_stack_shortcut, Key.A);
+        public static Color badge_color => ColorSettingUI.ParseColor(badge_color_config, new Color(1f, 0.85f, 0.2f, 1f));
 
         public override void Ready()
         {
@@ -35,13 +37,14 @@ namespace StackMenu
             AddCardToBottomConfig.UI.Name = "Add Card to Bottom of Stack";
             AddCardToBottomConfig.UI.Tooltip = "Currently disabled";
 
-            pin_unpin_shortcut = SetupKeybindConfig("pin_unpin_shortcut", "Pin/Unpin Card", "P");
-            compact_uncompact_shortcut = SetupKeybindConfig("compact_uncompact_shortcut", "Compact/Unpack Card", "C");
-            sort_by_name_shortcut = SetupKeybindConfig("sort_by_name_shortcut", "Sort by Name", "N");
-            sort_by_value_shortcut = SetupKeybindConfig("sort_by_value_shortcut", "Sort by Value", "V");
-            sort_by_type_shortcut = SetupKeybindConfig("sort_by_type_shortcut", "Sort by Type", "T");
-            slip_all_card_shortcut = SetupKeybindConfig("slip_all_card_shortcut", "Split All Cards", "S");
-            slip_all_card_to_stack_shortcut = SetupKeybindConfig("slip_all_card_to_stack_shortcut", "Split All to Each Stack", "A");
+            pin_unpin_shortcut = SetupKeybindConfig("pin_unpin_shortcut", "Pin/Unpin Card", "Pin or unpin a card", "P");
+            compact_uncompact_shortcut = SetupKeybindConfig("compact_uncompact_shortcut", "Compact/Unpack Card", "Compact or unpack a card", "C");
+            sort_by_name_shortcut = SetupKeybindConfig("sort_by_name_shortcut", "Sort by Name", "Sort cards by their name", "N");
+            sort_by_value_shortcut = SetupKeybindConfig("sort_by_value_shortcut", "Sort by Value", "Sort cards by their value", "V");
+            sort_by_type_shortcut = SetupKeybindConfig("sort_by_type_shortcut", "Sort by Type", "Sort cards by their type", "T");
+            slip_all_card_shortcut = SetupKeybindConfig("slip_all_card_shortcut", "Split All Cards", "Split all cards", "S");
+            slip_all_card_to_stack_shortcut = SetupKeybindConfig("slip_all_card_to_stack_shortcut", "Split All to Each Stack", "Split all cards to each stack", "A");
+            badge_color_config = SetupColorConfig("badge_color_config", "Badge Color", "Color of the badge indicator on cards", "#FFD933");
 
             try
             {
@@ -55,11 +58,38 @@ namespace StackMenu
             Logger.Log("StackMenuMod Ready called.");
         }
 
-        private ConfigEntry<string> SetupKeybindConfig(string name, string displayName, string defaultKey)
+        private ConfigEntry<string> SetupColorConfig(string name, string displayName, string tooltip, string defaultColorHex)
+        {
+            var entry = Config.GetEntry<string>(name, defaultColorHex);
+            entry.UI.Name = displayName;
+            entry.UI.Hidden = true;
+            entry.UI.Tooltip = tooltip;
+            entry.UI.OnUI = (ConfigEntryBase entryBase) =>
+            {
+                if (PrefabManager.instance == null || ModOptionsScreen.instance == null) return;
+
+                var btn = UnityEngine.Object.Instantiate(PrefabManager.instance.ButtonPrefab, ModOptionsScreen.instance.ButtonsParent);
+                btn.transform.localScale = Vector3.one;
+                btn.transform.localPosition = Vector3.zero;
+                btn.transform.localRotation = Quaternion.identity;
+
+                var colorUI = btn.gameObject.AddComponent<ColorSettingUI>();
+                Color current = ColorSettingUI.ParseColor(entry, new Color(1f, 0.85f, 0.2f, 1f));
+                colorUI.Initialize(current, displayName, (newColor) =>
+                {
+                    entry.Value = ColorSettingUI.ColorToHex(newColor);
+                    CardMenu.UpdateAll();
+                });
+            };
+            return entry;
+        }
+
+        private ConfigEntry<string> SetupKeybindConfig(string name, string displayName, string tooltip, string defaultKey)
         {
             var entry = Config.GetEntry<string>(name, defaultKey);
             entry.UI.Name = displayName;
             entry.UI.Hidden = true;
+            entry.UI.Tooltip = tooltip;
             entry.UI.OnUI = (ConfigEntryBase entryBase) =>
             {
                 if (PrefabManager.instance == null || ModOptionsScreen.instance == null) return;
@@ -156,6 +186,69 @@ namespace StackMenu
         }
     }
 
+
+    // [HarmonyPatch(typeof(GameCard))]
+    // public static class GameCard_Patch
+    // {
+    //     private static readonly AccessTools.FieldRef<GameCard, bool> snappedToParentRef =
+    //         AccessTools.FieldRefAccess<GameCard, bool>("snappedToParent");
+
+    //     private static readonly AccessTools.FieldRef<GameCard, Vector3> targetPositionRef =
+    //         AccessTools.FieldRefAccess<GameCard, Vector3>("TargetPosition");
+
+    //     [HarmonyPatch("SetToParentPosition")]
+    //     [HarmonyPrefix]
+    //     public static bool SetToParentPosition_Prefix(GameCard __instance, bool hardSetPos)
+    //     {
+    //         if (__instance.Parent == null) return false;
+
+    //         Vector3 offset;
+    //         if (!__instance.IsCollapsed)
+    //         {
+    //             offset = new Vector3(
+    //                 0f,
+    //                 -WorldManager.instance.CardOverlayHeightOffset,
+    //                 WorldManager.instance.CardOverlayOffset
+    //             );
+    //         }
+    //         else
+    //         {
+    //             offset = new Vector3(
+    //                 0f,
+    //                 -WorldManager.instance.CardOverlayHeightOffset,
+    //                 WorldManager.instance.CollapsedCardOverlayOffset
+    //             );
+    //         }
+
+    //         Vector3 targetPos = __instance.Parent.transform.position + offset;
+    //         bool isSnapped = snappedToParentRef(__instance);
+
+    //         if (!isSnapped)
+    //         {
+    //             __instance.transform.position = Vector3.Lerp(__instance.transform.position, targetPos, Time.deltaTime * 20f);
+    //             if (Vector3.Distance(__instance.transform.position, targetPos) < 0.001f)
+    //             {
+    //                 snappedToParentRef(__instance) = true; // Gán giá trị qua FieldRef
+    //             }
+    //         }
+    //         else
+    //         {
+    //             __instance.transform.position = Vector3.Lerp(__instance.transform.position, targetPos, Time.deltaTime * 20f);
+    //             Vector3 position = __instance.transform.position;
+    //             position.y = targetPos.y;
+    //             __instance.transform.position = position;
+    //         }
+
+    //         if (hardSetPos)
+    //         {
+    //             __instance.transform.position = targetPos;
+    //             targetPositionRef(__instance) = targetPos; // Gán giá trị qua FieldRef
+    //         }
+
+    //         return false;
+    //     }
+    // }
+
     // [HarmonyPatch(typeof(WorldManager), nameof(WorldManager.CheckIfCanAddOnStack))]
     // public static class WorldManager_CheckIfCanAddOnStack_Patch
     // {
@@ -166,54 +259,8 @@ namespace StackMenu
     //             // Bottom insertion mode: topCard will become the parent of the root of the target stack
     //             List<GameCard> overlappingCards = topCard.GetOverlappingCards();
     //             float num = float.MaxValue;
-    //             GameCard targetRoot = null;
+    //             GameCard gameCard = null;
 
-    //             foreach (GameCard item in overlappingCards)
-    //             {
-    //                 if (item == topCard || item.IsChildOf(topCard))
-    //                 {
-    //                     continue;
-    //                 }
-
-    //                 GameCard rootCard = item.GetRootCard();
-    //                 if (rootCard == topCard || rootCard.IsChildOf(topCard))
-    //                 {
-    //                     continue;
-    //                 }
-
-    //                 // Check if topCard (or bottom of topCard stack) can have rootCard on top
-    //                 GameCard topCardLeaf = topCard.GetLeafCard();
-    //                 GameCard cardWithStatus = rootCard.GetCardWithStatusInStack();
-    //                 if (cardWithStatus != null && !cardWithStatus.CardData.CanHaveCardsWhileHasStatus())
-    //                 {
-    //                     continue;
-    //                 }
-
-    //                 if (topCardLeaf.CardData.CanHaveCardOnTop(rootCard.CardData))
-    //                 {
-    //                     Vector3 vector = topCard.transform.position - item.transform.position;
-    //                     vector.y = 0f;
-    //                     if (vector.magnitude < num)
-    //                     {
-    //                         targetRoot = rootCard;
-    //                         num = vector.magnitude;
-    //                     }
-    //                 }
-    //             }
-
-    //             if (targetRoot != null)
-    //             {
-    //                 GameCard topCardLeaf = topCard.GetLeafCard();
-    //                 targetRoot.SetParent(topCardLeaf);
-    //                 __result = true;
-    //                 return false;
-    //             }
-
-    //             __result = false;
-    //             return false;
-    //         }
-    //     }
-    // }
     //         }
 
     //         // Default top insertion mode (vanilla behavior)

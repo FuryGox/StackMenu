@@ -323,7 +323,7 @@ namespace StackMenu
             }
         }
 
-        public static void UpdateBadge(GameCard card)
+        public static void UpdateBadge(GameCard card, Color? color = null)
         {
             if (card == null || card.CardData == null) return;
 
@@ -341,6 +341,8 @@ namespace StackMenu
                 return;
             }
 
+            Color targetColor = color ?? StackMenuMod.badge_color;
+
             TextMeshPro tmp;
             if (badgeTransform == null)
             {
@@ -354,7 +356,7 @@ namespace StackMenu
                     tmp.fontSize = card.CardNameText.fontSize * 0.2f;
                 }
                 tmp.alignment = TextAlignmentOptions.TopGeoAligned;
-                tmp.color = new Color(1f, 0.85f, 0.2f, 1f);
+                tmp.color = targetColor;
                 tmp.rectTransform.sizeDelta = new Vector2(1f, 0.5f);
                 tmp.rectTransform.localPosition = new Vector3(0f, 0.1f, -0.01f);
                 tmp.rectTransform.localRotation = Quaternion.identity;
@@ -362,6 +364,10 @@ namespace StackMenu
             else
             {
                 tmp = badgeTransform.GetComponent<TextMeshPro>();
+                if (tmp != null)
+                {
+                    tmp.color = targetColor;
+                }
             }
 
             string text = "";
@@ -395,12 +401,15 @@ namespace StackMenu
                 var dead = pinnedCards.Keys.Where(c => c == null || c.Destroyed || c.Parent != null).ToList();
                 foreach (var d in dead)
                 {
-                    if (d != null && !d.Destroyed && d.Parent != null)
+                    if (d != null)
                     {
-                        d.PushEnabled = true;
-                        UpdateBadge(d);
+                        if (!d.Destroyed && d.Parent != null)
+                        {
+                            d.PushEnabled = true;
+                            UpdateBadge(d);
+                        }
+                        pinnedCards.Remove(d);
                     }
-                    pinnedCards.Remove(d);
                 }
             }
 
