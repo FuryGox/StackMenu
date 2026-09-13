@@ -33,10 +33,9 @@ namespace StackMenu
 
         public override void Ready()
         {
-            AddCardToBottomConfig = Config.GetEntry<bool>("add_card_to_bottom", false);
-            AddCardToBottomConfig.UI.Name = "Add Card to Bottom of Stack";
-            AddCardToBottomConfig.UI.Tooltip = "Currently disabled";
-
+            // AddCardToBottomConfig = Config.GetEntry<bool>("add_card_to_bottom", false);
+            // AddCardToBottomConfig.UI.Name = "Add Card to Bottom of Stack";
+            // AddCardToBottomConfig.UI.Tooltip = "Currently disabled";
             pin_unpin_shortcut = CustomMenuAPI.SetupKeybindConfig(Config, "pin_unpin_shortcut", "Pin/Unpin Card", "Pin or unpin a card", "P");
             compact_uncompact_shortcut = CustomMenuAPI.SetupKeybindConfig(Config, "compact_uncompact_shortcut", "Compact/Unpack Card", "Compact or unpack a card", "C");
             sort_by_name_shortcut = CustomMenuAPI.SetupKeybindConfig(Config, "sort_by_name_shortcut", "Sort by Name", "Sort cards by their name", "N");
