@@ -37,14 +37,14 @@ namespace StackMenu
             AddCardToBottomConfig.UI.Name = "Add Card to Bottom of Stack";
             AddCardToBottomConfig.UI.Tooltip = "Currently disabled";
 
-            pin_unpin_shortcut = SetupKeybindConfig("pin_unpin_shortcut", "Pin/Unpin Card", "Pin or unpin a card", "P");
-            compact_uncompact_shortcut = SetupKeybindConfig("compact_uncompact_shortcut", "Compact/Unpack Card", "Compact or unpack a card", "C");
-            sort_by_name_shortcut = SetupKeybindConfig("sort_by_name_shortcut", "Sort by Name", "Sort cards by their name", "N");
-            sort_by_value_shortcut = SetupKeybindConfig("sort_by_value_shortcut", "Sort by Value", "Sort cards by their value", "V");
-            sort_by_type_shortcut = SetupKeybindConfig("sort_by_type_shortcut", "Sort by Type", "Sort cards by their type", "T");
-            slip_all_card_shortcut = SetupKeybindConfig("slip_all_card_shortcut", "Split All Cards", "Split all cards", "S");
-            slip_all_card_to_stack_shortcut = SetupKeybindConfig("slip_all_card_to_stack_shortcut", "Split All to Each Stack", "Split all cards to each stack", "A");
-            badge_color_config = SetupColorConfig("badge_color_config", "Badge Color", "Color of the badge indicator on cards", "#FFD933");
+            pin_unpin_shortcut = CustomMenuAPI.SetupKeybindConfig(Config, "pin_unpin_shortcut", "Pin/Unpin Card", "Pin or unpin a card", "P");
+            compact_uncompact_shortcut = CustomMenuAPI.SetupKeybindConfig(Config, "compact_uncompact_shortcut", "Compact/Unpack Card", "Compact or unpack a card", "C");
+            sort_by_name_shortcut = CustomMenuAPI.SetupKeybindConfig(Config, "sort_by_name_shortcut", "Sort by Name", "Sort cards by their name", "N");
+            sort_by_value_shortcut = CustomMenuAPI.SetupKeybindConfig(Config, "sort_by_value_shortcut", "Sort by Value", "Sort cards by their value", "V");
+            sort_by_type_shortcut = CustomMenuAPI.SetupKeybindConfig(Config, "sort_by_type_shortcut", "Sort by Type", "Sort cards by their type", "T");
+            slip_all_card_shortcut = CustomMenuAPI.SetupKeybindConfig(Config, "slip_all_card_shortcut", "Split All Cards", "Split all cards", "S");
+            slip_all_card_to_stack_shortcut = CustomMenuAPI.SetupKeybindConfig(Config, "slip_all_card_to_stack_shortcut", "Split All to Each Stack", "Split all cards to each stack", "A");
+            badge_color_config = CustomMenuAPI.SetupColorConfig(Config, "badge_color_config", "Badge Color", "Color of the badge indicator on cards", "#FFD933", (_) => CardMenu.UpdateAll());
 
             try
             {
@@ -56,57 +56,6 @@ namespace StackMenu
                 Logger.Log($"StackMenuMod failed to apply Harmony patches: {ex.Message}");
             }
             Logger.Log("StackMenuMod Ready called.");
-        }
-
-        private ConfigEntry<string> SetupColorConfig(string name, string displayName, string tooltip, string defaultColorHex)
-        {
-            var entry = Config.GetEntry<string>(name, defaultColorHex);
-            entry.UI.Name = displayName;
-            entry.UI.Hidden = true;
-            entry.UI.Tooltip = tooltip;
-            entry.UI.OnUI = (ConfigEntryBase entryBase) =>
-            {
-                if (PrefabManager.instance == null || ModOptionsScreen.instance == null) return;
-
-                var btn = UnityEngine.Object.Instantiate(PrefabManager.instance.ButtonPrefab, ModOptionsScreen.instance.ButtonsParent);
-                btn.transform.localScale = Vector3.one;
-                btn.transform.localPosition = Vector3.zero;
-                btn.transform.localRotation = Quaternion.identity;
-
-                var colorUI = btn.gameObject.AddComponent<ColorSettingUI>();
-                Color current = ColorSettingUI.ParseColor(entry, new Color(1f, 0.85f, 0.2f, 1f));
-                colorUI.Initialize(current, displayName, (newColor) =>
-                {
-                    entry.Value = ColorSettingUI.ColorToHex(newColor);
-                    CardMenu.UpdateAll();
-                });
-            };
-            return entry;
-        }
-
-        private ConfigEntry<string> SetupKeybindConfig(string name, string displayName, string tooltip, string defaultKey)
-        {
-            var entry = Config.GetEntry<string>(name, defaultKey);
-            entry.UI.Name = displayName;
-            entry.UI.Hidden = true;
-            entry.UI.Tooltip = tooltip;
-            entry.UI.OnUI = (ConfigEntryBase entryBase) =>
-            {
-                if (PrefabManager.instance == null || ModOptionsScreen.instance == null) return;
-
-                var btn = UnityEngine.Object.Instantiate(PrefabManager.instance.ButtonPrefab, ModOptionsScreen.instance.ButtonsParent);
-                btn.transform.localScale = Vector3.one;
-                btn.transform.localPosition = Vector3.zero;
-                btn.transform.localRotation = Quaternion.identity;
-
-                var keybindUI = btn.gameObject.AddComponent<KeybindSettingUI>();
-                Key current = KeybindSettingUI.ParseKey(entry, Key.None);
-                keybindUI.Initialize(current, displayName, (newKey) =>
-                {
-                    entry.Value = newKey.ToString();
-                });
-            };
-            return entry;
         }
 
         private void Update()
@@ -170,6 +119,19 @@ namespace StackMenu
                         items.Add(MenuItem.Action("Split All to Each Stack", () => StackSorter.SplitAllToEachStack(hoveredCard), slip_all_card_to_stack_key));
                         items.Add(MenuItem.Action("Split All", () => StackSorter.SplitAll(hoveredCard), slip_all_card_key));
                     }
+
+                    // --- Custom Mod Menu Items (Integrated Section) ---
+                    var customItems = CustomMenuAPI.GetCustomMenuItems(hoveredCard);
+                    if (customItems != null && customItems.Count > 0)
+                    {
+                        if (items.Count > 0)
+                        {
+                            items.Add(MenuItem.Separator());
+                        }
+                        items.AddRange(customItems);
+                    }
+
+                    items = CustomMenuAPI.SanitizeMenuItems(items);
 
                     if (items.Count > 0)
                     {

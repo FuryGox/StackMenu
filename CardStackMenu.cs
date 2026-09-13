@@ -20,7 +20,7 @@ namespace StackMenu
             OnClick = onClick,
             IsSeparator = false,
             ShortcutKey = shortcutKey,
-            ShortcutLabel = shortcutLabel ?? (shortcutKey.HasValue ? shortcutKey.Value.ToString() : null)
+            ShortcutLabel = shortcutLabel ?? (shortcutKey.HasValue && shortcutKey.Value != Key.None ? shortcutKey.Value.ToString() : null)
         };
 
         public static MenuItem Separator() => new MenuItem { IsSeparator = true };
@@ -195,7 +195,7 @@ namespace StackMenu
 
                 foreach (var item in currentItems)
                 {
-                    if (item.ShortcutKey.HasValue && item.OnClick != null)
+                    if (item.ShortcutKey.HasValue && item.ShortcutKey.Value != Key.None && item.OnClick != null)
                     {
                         var keyControl = Keyboard.current[item.ShortcutKey.Value];
                         if (keyControl != null && keyControl.wasPressedThisFrame)
